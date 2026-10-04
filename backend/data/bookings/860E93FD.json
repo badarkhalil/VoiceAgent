@@ -1,0 +1,11 @@
+{
+  "booking_id": "860E93FD",
+  "guest_name": "Noman Hassan",
+  "contact": null,
+  "check_in": "2022-07-04",
+  "check_out": "2022-07-08",
+  "room_type": "standard",
+  "num_guests": 2,
+  "price_per_night": 120,
+  "created_at": "2026-08-04T00:41:10.695741"
+}

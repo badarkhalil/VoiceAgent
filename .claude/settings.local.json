@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:docs.mistral.ai)",
+      "WebFetch(domain:blog.devmobile.co.nz)",
+      "WebFetch(domain:techjacksolutions.com)",
+      "Bash(python scripts/seed_qdrant.py:*)",
+      "Bash(where:*)",
+      "Bash(docker info:*)",
+      "Bash(start \"\" \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\")",
+      "Bash(timeout /t 30 /nobreak)",
+      "Bash(powershell -Command \"Write-Host ''Waiting for Docker daemon...''; for \\($i=0; $i -lt 60; $i++\\) { Start-Sleep -Seconds 2; try { docker info 2>$null | Out-Null; if \\($LASTEXITCODE -eq 0\\) { Write-Host ''Docker is ready''; exit 0 } } catch {} }; Write-Host ''Docker not ready after 2 minutes''\")",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell:*)",
+      "Bash(docker run:*)",
+      "Bash(docker start:*)",
+      "Bash(python -m uvicorn:*)"
+    ]
+  }
+}

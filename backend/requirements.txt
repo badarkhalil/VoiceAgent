@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+websockets
+httpx
+aiofiles
+qdrant-client
+faster-whisper
+numpy
+silero-vad
+pydantic
+python-dotenv

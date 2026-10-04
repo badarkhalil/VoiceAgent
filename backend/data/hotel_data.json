@@ -1,0 +1,186 @@
+{
+  "hotel": {
+    "name": "The Grand Azure Hotel",
+    "rating": "5-star luxury",
+    "location": "Oceanfront, Azure Bay",
+    "floors": 8,
+    "total_rooms": 50,
+    "description": "The Grand Azure Hotel is a premier 5-star luxury oceanfront resort located on the pristine shores of Azure Bay. With 50 elegantly appointed rooms across 8 floors, we offer unparalleled hospitality and breathtaking ocean views."
+  },
+  "rooms": [
+    {
+      "type": "Standard",
+      "price_per_night": 120,
+      "floors": "2-3",
+      "count": 20,
+      "size": "300 sq ft",
+      "bed": "Queen bed",
+      "max_guests": 2,
+      "features": ["Ocean or garden view", "42-inch smart TV", "Mini fridge", "Work desk", "Free WiFi", "En-suite bathroom with rain shower", "Complimentary toiletries"]
+    },
+    {
+      "type": "Deluxe",
+      "price_per_night": 250,
+      "floors": "4-5",
+      "count": 18,
+      "size": "500 sq ft",
+      "bed": "King bed",
+      "max_guests": 3,
+      "features": ["Guaranteed ocean view", "55-inch smart TV", "Mini bar", "Sitting area", "Work desk", "Free WiFi", "Marble bathroom with soaking tub and rain shower", "Luxury toiletries", "Nespresso machine", "Bathrobe and slippers"]
+    },
+    {
+      "type": "Suite",
+      "price_per_night": 450,
+      "floors": "6-7",
+      "count": 10,
+      "size": "850 sq ft",
+      "bed": "King bed plus sofa bed",
+      "max_guests": 4,
+      "features": ["Panoramic ocean view", "Separate living room", "65-inch smart TV", "Full mini bar", "Dining area for 4", "Work desk", "Free WiFi", "Luxury marble bathroom with jacuzzi tub and walk-in rain shower", "Premium toiletries", "Espresso machine", "Bathrobe and slippers", "Turn-down service", "Welcome fruit basket and champagne"]
+    },
+    {
+      "type": "Presidential",
+      "price_per_night": 900,
+      "floors": "7",
+      "count": 2,
+      "size": "1500 sq ft",
+      "bed": "California King bed plus queen sofa bed",
+      "max_guests": 4,
+      "features": ["270-degree panoramic ocean view", "Separate master bedroom and living room", "Private terrace with hot tub", "75-inch smart TV in each room", "Full bar setup", "Dining room for 6", "Executive desk", "Free WiFi", "Two luxury marble bathrooms", "Premium Italian toiletries", "Nespresso Pro machine", "Personalized monogrammed bathrobe", "24/7 dedicated butler service", "Priority restaurant reservations", "Complimentary airport transfer", "Welcome Dom Perignon champagne"]
+    }
+  ],
+  "amenities": [
+    {
+      "name": "Azure Rooftop Pool",
+      "floor": 8,
+      "hours": "7:00 AM - 10:00 PM",
+      "description": "Infinity pool on the 8th floor with panoramic ocean views. Heated year-round. Poolside bar and loungers available. Towels provided. Children under 12 must be accompanied by an adult."
+    },
+    {
+      "name": "Serenity Spa & Wellness Center",
+      "floor": 1,
+      "hours": "9:00 AM - 9:00 PM",
+      "description": "Full-service spa offering massages, facials, body treatments, and aromatherapy. Includes sauna, steam room, and relaxation lounge. Advance booking recommended. Spa packages start at $89."
+    },
+    {
+      "name": "Azure Restaurant",
+      "floor": 1,
+      "hours": "Breakfast 6:30-10:30 AM, Lunch 12:00-2:30 PM, Dinner 6:00-10:00 PM",
+      "description": "Award-winning restaurant serving Mediterranean and international cuisine. Farm-to-table ingredients with daily specials. Breakfast buffet included for all guests. Smart casual dress code for dinner. Reservations recommended for dinner."
+    },
+    {
+      "name": "Sky Bar",
+      "floor": 8,
+      "hours": "5:00 PM - 1:00 AM",
+      "description": "Rooftop cocktail bar with live music on Friday and Saturday nights. Signature cocktails, premium wines, and craft beers. Dress code: smart casual. Happy hour 5-7 PM daily with 20% off cocktails."
+    },
+    {
+      "name": "Business Center",
+      "floor": 2,
+      "hours": "24/7",
+      "description": "Fully equipped business center with high-speed internet, printing, scanning, and copying services. Two private meeting rooms seating up to 12 people. Video conferencing equipment available. Complimentary for all guests."
+    },
+    {
+      "name": "Fitness Center",
+      "floor": 2,
+      "hours": "24/7",
+      "description": "State-of-the-art gym with cardio machines, free weights, and strength training equipment. Personal training available on request ($75/session). Yoga mats and towels provided."
+    },
+    {
+      "name": "Kids Club - Azure Explorers",
+      "floor": 1,
+      "hours": "9:00 AM - 6:00 PM",
+      "description": "Supervised activities for children ages 4-12. Arts and crafts, games, movie screenings, and outdoor activities. Half-day ($35) and full-day ($60) programs available. Lunch included in full-day program."
+    }
+  ],
+  "services": [
+    {
+      "name": "Airport Shuttle",
+      "description": "Complimentary airport shuttle service available every 30 minutes from 5:00 AM to 11:00 PM. Private transfer available for $45 one way. Please book at least 24 hours in advance through the concierge."
+    },
+    {
+      "name": "Room Service",
+      "description": "24/7 in-room dining available. Full menu until 10:00 PM, limited late-night menu from 10:00 PM to 6:00 AM. Average delivery time 30-40 minutes. 18% service charge applies."
+    },
+    {
+      "name": "Concierge",
+      "description": "24/7 concierge service for restaurant reservations, tour bookings, transportation arrangements, and local recommendations. Multilingual staff speaking English, Spanish, French, and Mandarin."
+    },
+    {
+      "name": "Laundry & Dry Cleaning",
+      "description": "Same-day laundry and dry cleaning service. Items collected before 10:00 AM are returned by 6:00 PM. Express 3-hour service available at 50% surcharge. Laundry bags and forms in each room."
+    },
+    {
+      "name": "Valet Parking",
+      "description": "Valet parking available at $25 per night. Self-parking in the underground garage at $15 per night. Electric vehicle charging stations available (4 stations, complimentary for guests)."
+    },
+    {
+      "name": "Turndown Service",
+      "description": "Evening turndown service available for Suite and Presidential rooms. Available on request for Standard and Deluxe rooms. Includes fresh towels, chocolates, and next-day weather card."
+    },
+    {
+      "name": "Pet Services",
+      "description": "The Grand Azure Hotel is pet-friendly! Dogs and cats under 30 pounds welcome. Pet fee of $50 per stay. Pet bed, bowls, and treats provided. Dog walking service available ($20 per walk). Nearby pet-friendly beach within walking distance."
+    }
+  ],
+  "policies": [
+    {
+      "name": "Check-in & Check-out",
+      "details": "Check-in time is 3:00 PM. Check-out time is 11:00 AM. Early check-in available from 12:00 PM subject to availability ($50 fee). Late check-out available until 2:00 PM subject to availability ($50 fee). Luggage storage available for early arrivals and late departures at no charge."
+    },
+    {
+      "name": "Cancellation Policy",
+      "details": "Free cancellation up to 24 hours before check-in. Cancellations within 24 hours will be charged one night's room rate. No-shows will be charged the full stay amount. Group bookings (5+ rooms) require 72-hour cancellation notice."
+    },
+    {
+      "name": "Smoking Policy",
+      "details": "The Grand Azure Hotel is a non-smoking property. Smoking is not permitted in any rooms or indoor areas. Designated smoking areas are available on the ground floor terrace. A $250 cleaning fee applies for smoking in rooms."
+    },
+    {
+      "name": "Pet Policy",
+      "details": "Dogs and cats under 30 pounds are welcome. Maximum 2 pets per room. Pet fee of $50 per stay (not per night). Pets must be leashed in common areas. Pets are not allowed in the restaurant, spa, or pool areas. Pet-friendly rooms available on floors 2 and 3."
+    },
+    {
+      "name": "Payment",
+      "details": "We accept all major credit cards (Visa, Mastercard, American Express, Discover). A credit card authorization hold equal to the full stay amount plus $100 incidentals deposit is placed at check-in. Cash payments accepted with valid ID and a $200 security deposit."
+    },
+    {
+      "name": "Age Policy",
+      "details": "Guests must be 18 years or older to check in. Children under 12 stay free when sharing a room with parents using existing bedding. Rollaway beds available for $30 per night."
+    }
+  ],
+  "faq": [
+    {
+      "question": "Do you have free WiFi?",
+      "answer": "Yes, complimentary high-speed WiFi is available throughout the hotel, including all rooms, lobby, restaurant, and pool areas. Premium bandwidth WiFi is available for $10/day for video conferencing and streaming needs."
+    },
+    {
+      "question": "Is breakfast included?",
+      "answer": "Yes! A full breakfast buffet at our Azure Restaurant is included for all room types. Breakfast is served from 6:30 AM to 10:30 AM daily and features hot and cold items, fresh pastries, fruits, and made-to-order eggs."
+    },
+    {
+      "question": "Do you have accessible rooms?",
+      "answer": "Yes, we have 4 ADA-compliant accessible rooms available on the 2nd floor. These rooms feature wider doorways, roll-in showers, grab bars, lowered amenities, and visual notification systems. Please request at booking."
+    },
+    {
+      "question": "Can I host an event or wedding?",
+      "answer": "Yes! Our Grand Ballroom on the 1st floor accommodates up to 200 guests. We also have the Azure Terrace for outdoor events with ocean views (up to 100 guests). Our events team can help with catering, decorations, and entertainment. Contact events@grandazure.com for proposals."
+    },
+    {
+      "question": "What is the nearest airport?",
+      "answer": "Azure Bay International Airport is 15 miles from the hotel, approximately a 25-minute drive. We offer complimentary shuttle service and private transfers. Helicopter transfer is also available upon request."
+    },
+    {
+      "question": "Do you offer day passes?",
+      "answer": "Yes, non-guests can purchase day passes for the pool and spa. Pool day pass is $45 per person (includes towel, lounger, and one drink). Spa day pass is $75 per person (includes facility access and one 30-minute treatment)."
+    },
+    {
+      "question": "What activities are nearby?",
+      "answer": "Azure Bay offers excellent snorkeling and scuba diving, boat tours, jet skiing, and paddleboarding. The Azure Bay Nature Trail (2 miles) starts right from the hotel. Downtown Azure Bay with shops and galleries is a 10-minute walk. The concierge can arrange all activities and provide recommendations."
+    },
+    {
+      "question": "Is there a loyalty program?",
+      "answer": "Yes, the Azure Rewards program offers points for every stay. Silver tier (5 stays): 10% discount and late checkout. Gold tier (15 stays): 15% discount, room upgrades, and welcome amenity. Platinum tier (30 stays): 20% discount, suite upgrades, and complimentary spa treatment per stay. Sign up at the front desk or online."
+    }
+  ]
+}

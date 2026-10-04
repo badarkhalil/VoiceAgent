@@ -1,0 +1,12 @@
+nul
+tts_engine/voices/*.onnx
+tts_engine/voices/*.onnx
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc

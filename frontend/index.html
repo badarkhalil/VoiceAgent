@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grand Azure Hotel – Voice Assistant</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- Pre-call: Name Modal -->
+    <div class="name-modal" id="name-modal">
+      <div class="name-modal-content">
+        <div class="name-modal-logo">A</div>
+        <h2>The <span>Grand Azure</span> Hotel</h2>
+        <p class="name-modal-subtitle">AI Voice Concierge</p>
+        <div class="name-modal-form">
+          <label for="name-input">What's your name?</label>
+          <input type="text" id="name-input" placeholder="Enter your name..." autocomplete="off" />
+          <label for="lang-select">Language</label>
+          <div class="lang-selector">
+            <button class="lang-btn active" id="lang-en" data-lang="en">English</button>
+            <button class="lang-btn" id="lang-ur" data-lang="ur">اردو</button>
+          </div>
+          <button class="start-call-btn" id="start-call-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+            Start Call
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calling overlay -->
+    <div class="calling-overlay hidden" id="calling-overlay">
+      <div class="calling-content">
+        <div class="calling-avatar">
+          <span class="avatar-letter">A</span>
+        </div>
+        <div class="calling-name">Azure – Grand Azure Hotel</div>
+        <div class="calling-status" id="calling-status">Calling...</div>
+        <div class="calling-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- In-Call View -->
+    <div class="call-view hidden" id="call-view">
+
+      <!-- Header -->
+      <div class="call-header">
+        <h1>The <span>Grand Azure</span> Hotel</h1>
+        <p class="subtitle">AI Concierge</p>
+      </div>
+
+      <!-- Avatar Section -->
+      <div class="avatars-section">
+        <div class="avatar-card" id="avatar-azure">
+          <div class="avatar-circle azure">
+            <span class="avatar-letter">A</span>
+            <div class="speaking-ring"></div>
+          </div>
+          <div class="avatar-name">Azure</div>
+          <div class="avatar-status" id="azure-status">Listening</div>
+        </div>
+        <div class="avatar-card" id="avatar-user">
+          <div class="avatar-circle user">
+            <span class="avatar-letter" id="user-avatar-letter">U</span>
+            <div class="speaking-ring"></div>
+          </div>
+          <div class="avatar-name" id="user-display-name">You</div>
+          <div class="avatar-status" id="user-status">Connected</div>
+        </div>
+      </div>
+
+      <!-- Chat Transcript -->
+      <div class="chat-container" id="transcript">
+      </div>
+
+      <!-- Bottom Panels -->
+      <div class="panels-row">
+        <!-- Booking Panel -->
+        <div class="booking-panel hidden" id="booking-panel">
+          <div class="booking-title">Booking Details</div>
+          <div class="slots-grid" id="booking-slots"></div>
+        </div>
+
+        <!-- Performance Panel -->
+        <div class="perf-panel" id="perf-panel">
+          <button class="perf-toggle" id="perf-toggle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Performance
+            <span class="perf-chevron" id="perf-chevron">&#9660;</span>
+          </button>
+          <div class="perf-body hidden" id="perf-body">
+            <div class="perf-entries" id="perf-entries">
+              <div class="perf-empty">Timing data appears after first response</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- End Call Button -->
+      <div class="call-controls">
+        <button class="end-call-btn" id="end-call-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24">
+            <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91"/>
+            <line x1="23" y1="1" x2="1" y2="23"/>
+          </svg>
+        </button>
+        <span class="call-timer" id="call-timer">00:00</span>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
