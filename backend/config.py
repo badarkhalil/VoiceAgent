@@ -27,7 +27,7 @@ MISTRAL_CHAT_MODEL = "mistral-small-latest"
 MISTRAL_EMBED_MODEL = "mistral-embed"
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = "gemini-3.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 # Embedding provider: Mistral (1024-dim) if available, else Ollama (768-dim)
 EMBED_PROVIDER = "mistral" if MISTRAL_API_KEY else "ollama"
@@ -65,14 +65,17 @@ AUDIO_CHANNELS = 1
 AUDIO_SAMPLE_WIDTH = 2
 
 # ── VAD ────────────────────────────────────────────────────────────────
-VAD_THRESHOLD = 0.65
+VAD_THRESHOLD = 0.75
 VAD_MIN_SILENCE_MS = 800
 VAD_MIN_SPEECH_MS = 400
 
 # ── Audio energy gating ──────────────────────────────────────────────
-AUDIO_ENERGY_THRESHOLD = 200      # min RMS (0-32768) to consider as speech
-INTERRUPT_ENERGY_THRESHOLD = 400  # higher RMS needed to interrupt agent mid-speech
+AUDIO_ENERGY_THRESHOLD = 300      # min RMS (0-32768) to consider as speech
+INTERRUPT_ENERGY_THRESHOLD = 900  # higher RMS needed to interrupt agent mid-speech
 MIN_AUDIO_DURATION_MS = 300       # minimum audio length to process (ms)
+MIN_INTERRUPT_MS = 400            # minimum sustained VAD speech to accept as a real interrupt
+MIN_INTERRUPT_BYTES = 12800       # ~400ms at 16kHz s16le — minimum audio for an interrupt
+MAX_AUDIO_BUFFER_SECONDS = 30     # hard cap so stuck noise can't grow the buffer forever
 
 # ── Whisper confidence filtering ─────────────────────────────────────
 WHISPER_NO_SPEECH_THRESHOLD = 0.6   # reject segments with no_speech_prob above this
@@ -97,7 +100,8 @@ Rules:
 - Speak in a conversational flow. Avoid long explanations.
 
 Booking flow:
-- Collect: guest name, check-in date, check-out date, room type, number of guests. Contact info is optional.
+- Collect only the booking details that are still missing. The system tells you exactly what is still needed at the very end of this prompt.
+- Never ask for information that is already known or already listed as collected.
 - Ask for one or two pieces of info at a time, not all at once.
 - When all required info is collected, do NOT keep asking questions. The system will auto-confirm."""
 
@@ -112,7 +116,8 @@ LLM_SYSTEM_PROMPT_UR = """آپ ایزور ہیں، گرینڈ ایزور ہوٹ�
 - سیدھا جواب دیں۔ فالتو جملے نہ لکھیں۔
 
 بکنگ:
-- جمع کریں: مہمان کا نام، چیک ان، چیک آؤٹ، کمرے کی قسم، مہمانوں کی تعداد۔ رابطہ اختیاری ہے۔
+- صرف وہ معلومات پوچھیں جو ابھی تک نہیں ملیں۔ اس پرامپٹ کے بالکل آخر میں سسٹم بتاتا ہے کہ کیا کیا درکار ہے۔
+- جو معلومات پہلے سے معلوم ہوں یا جمع ہو چکی ہوں، ان کے بارے میں کبھی نہ پوچھیں۔
 - ایک وقت میں ایک یا دو معلومات پوچھیں، سب ایک ساتھ نہیں۔
 - جب تمام معلومات مل جائیں تو مزید سوالات نہ پوچھیں — سسٹم خود تصدیق کرے گا۔
 
@@ -133,3 +138,31 @@ ROOM_TYPES = {
     "suite": {"price": 450, "floors": "6-7"},
     "presidential": {"price": 900, "floors": "7"},
 }
+
+# ── Fillers / backchannel ──────────────────────────────────────────────
+# Pre-synthesized short utterances streamed immediately after a real
+# transcript so the caller never hears dead air while RAG/LLM warm up.
+FILLER_ENABLED = True
+FILLER_MAX_WAIT_MS = 700          # don't play a filler if the reply starts faster
+FILLER_EN = [
+    "Hmm, let me check.",
+    "Okay.",
+    "Sure, one moment.",
+    "Let me see.",
+]
+FILLER_UR = [
+    "جی، ذرا دیکھتی ہوں۔",
+    "اچھا۔",
+    "ایک لمحہ۔",
+]
+
+# ── Avatar / animation ─────────────────────────────────────────────────
+AVATAR_ENABLED = True
+AVATAR_ID = "azure"
+SENTENCE_AUDIO_LEAD_MS = 120      # client-side lead before mouth motion begins
+ANIMATION_ALIGNMENT = "estimated-rule-based"
+ANIMATION_VERSION = "1.0"
+
+# Animation asset paths (served statically from FRONTEND_DIR)
+AVATARS_DIR = FRONTEND_DIR / "avatars"
+AVATAR_DEFAULT_DIR = AVATARS_DIR / AVATAR_ID

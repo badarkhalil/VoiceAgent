@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Avatar Lab</title>
+  <style>
+    :root { --bg:#101620; --panel:#18212f; --line:#28374b; --text:#e7edf6; --muted:#8ea0b8; --accent:#3da9fc; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:ui-sans-serif, system-ui, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:12px 20px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:12px; }
+    header h1 { font-size:16px; margin:0; }
+    header span { color:var(--muted); font-size:12px; }
+    .wrap { display:grid; grid-template-columns: minmax(320px,1fr) 380px; gap:16px; padding:16px; height:calc(100vh - 49px); }
+    .stage { position:relative; background:#000; border:1px solid var(--line); border-radius:14px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+    #canvas { width:100%; height:100%; display:block; }
+    aside { overflow:auto; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:14px; }
+    .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 10px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    button { background:#25334a; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 12px; cursor:pointer; font-size:13px; }
+    button.primary { background:var(--accent); border-color:var(--accent); color:#04121f; font-weight:600; }
+    button.active { outline:2px solid var(--accent); }
+    select, input[type=text], textarea { width:100%; background:#0e1520; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px; font-size:13px; }
+    input[type=range] { width:100%; }
+    label.toggle { display:flex; align-items:center; gap:8px; font-size:13px; margin:6px 0; }
+    .muted { color:var(--muted); font-size:12px; }
+    #status { font-size:12px; color:var(--muted); min-height:28px; }
+    fieldset { border:1px solid var(--line); border-radius:8px; padding:10px; margin:0 0 10px; }
+    legend { color:var(--muted); font-size:11px; padding:0 6px; }
+    @media (max-width:900px){ .wrap { grid-template-columns:1fr; height:auto; } .stage { min-height:420px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Avatar Lab</h1>
+    <span>renderer test bench — no STT/TTS required (spec §4, §28)</span>
+  </header>
+
+  <div class="wrap">
+    <div class="stage" id="stage">
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <aside>
+      <div class="card">
+        <h2>Playback</h2>
+        <div class="row">
+          <button class="primary" id="play">Play</button>
+          <button id="pause">Pause</button>
+          <button id="stop">Stop</button>
+          <button id="replay">Replay</button>
+          <button id="reset">Reset</button>
+        </div>
+        <p class="muted" id="clock" style="margin:10px 0 0">t = 0.000s · idle</p>
+      </div>
+
+      <div class="card">
+        <h2>Test</h2>
+        <div class="row">
+          <button id="run-test">Run Animation Test</button>
+          <button id="load-sample">Load sample JSON</button>
+        </div>
+        <div id="status" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <h2>Expression</h2>
+        <select id="expr">
+          <option>neutral</option><option selected>friendly</option><option>happy</option>
+          <option>sad</option><option>serious</option><option>surprised</option>
+          <option>thinking</option><option>confused</option>
+        </select>
+        <div style="margin-top:10px">
+          <label class="muted">Intensity <span id="expr-val">0.30</span></label>
+          <input type="range" id="expr-int" min="0" max="1" step="0.05" value="0.30" />
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Channels</h2>
+        <label class="toggle"><input type="checkbox" id="head-on" checked /> Head movement</label>
+        <label class="toggle"><input type="checkbox" id="blink-on" checked /> Blinking</label>
+        <label class="toggle"><input type="checkbox" id="debug-on" /> Debug overlay</label>
+      </div>
+
+      <div class="card">
+        <h2>Say (client estimate)</h2>
+        <textarea id="say-text" rows="2">Hello, welcome to the Grand Azure Hotel.</textarea>
+        <div class="row" style="margin-top:8px">
+          <button id="say">Speak</button>
+          <span class="muted">uses the client viseme provider</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script type="module">
+    import { AvatarRuntime } from "/js/avatar/AvatarRuntime.js";
+    import { VisemeProvider } from "/js/providers/VisemeProvider.js";
+
+    const canvas = document.getElementById("canvas");
+    const clockEl = document.getElementById("clock");
+    const statusEl = document.getElementById("status");
+    const setStatus = (s) => { statusEl.textContent = s; };
+
+    // ── Local clock (replaces AudioPlayer in the lab) ─────────────────
+    const clock = { playing: false, t: 0, duration: 0, sentenceIndex: 0, base: 0 };
+
+    const avatar = new AvatarRuntime({
+      canvas,
+      avatarId: "azure",
+      getClock: () => (clock.playing ? { sentenceIndex: clock.sentenceIndex, time: currentT() } : null),
+      debug: false,
+    });
+
+    function currentT() { return clock.base + (performance.now() / 1000 - clock.baseWall); }
+
+    // ── Sample data ───────────────────────────────────────────────────
+    let sample = null;
+    const controls = { expression: "friendly", intensity: 0.30, head: true, blink: true };
+
+    function buildPayload(base, { attachment = true } = {}) {
+      const payload = JSON.parse(JSON.stringify(base));
+      payload.expressions = [{ start: 0, end: payload.duration, type: controls.expression, intensity: controls.intensity }];
+      if (!controls.head) payload.head = [];
+      if (!controls.blink) payload.blinks = [];
+      return payload;
+    }
+
+    function apply(base) {
+      const payload = buildPayload(base);
+      payload.sentence_index = clock.sentenceIndex;
+      avatar.attachTimeline(payload);
+      clock.duration = payload.duration;
+    }
+
+    // ── Transport ─────────────────────────────────────────────────────
+    function play() {
+      if (!sample) { setStatus("Load the sample first."); return; }
+      if (clock.t >= clock.duration) clock.t = 0;
+      clock.base = clock.t;
+      clock.baseWall = performance.now() / 1000;
+      clock.playing = true;
+    }
+    function pause() {
+      clock.t = Math.min(currentT(), clock.duration);
+      clock.playing = false;
+    }
+    function stop() { clock.playing = false; clock.t = 0; }
+    function replay() { clock.t = 0; play(); }
+
+    function tickUI() {
+      const t = clock.playing ? Math.min(currentT(), clock.duration) : clock.t;
+      if (clock.playing && currentT() >= clock.duration) { clock.playing = false; clock.t = clock.duration; }
+      clockEl.textContent = `t = ${t.toFixed(3)}s / ${clock.duration.toFixed(2)}s · ${clock.playing ? "playing (sentence " + clock.sentenceIndex + ")" : "idle"}`;
+      requestAnimationFrame(tickUI);
+    }
+
+    // ── Boot ──────────────────────────────────────────────────────────
+    async function boot() {
+      const ok = await avatar.init();
+      if (!ok) throw new Error("init failed");
+      avatar.start();
+      // Toggles map straight to the controllers.
+      document.getElementById("head-on").addEventListener("change", (e) => {
+        controls.head = e.target.checked; avatar.head.enabled = controls.head;
+        if (sample) apply(sample);
+      });
+      document.getElementById("blink-on").addEventListener("change", (e) => {
+        controls.blink = e.target.checked; avatar.blink.enabled = controls.blink;
+        if (sample) apply(sample);
+      });
+      await loadSample();
+    }
+
+    async function loadSample() {
+      try {
+        const res = await fetch("/avatars/azure/sample-animation.json");
+        sample = await res.json();
+        apply(sample);
+        setStatus("Sample timeline loaded. Press Play.");
+      } catch (err) {
+        setStatus("Could not load sample-animation.json: " + err.message);
+      }
+    }
+
+    // ── Spec §28 test sequence ────────────────────────────────────────
+    function runAnimationTest() {
+      const seq = {
+        version: "1.0", avatarId: "azure", sentence_index: 0, duration: 6.0,
+        alignment: "estimated-rule-based",
+        visemes: [
+          { start: 0.6, end: 1.2, value: "ee" }, { start: 1.2, end: 1.6, value: "neutral" },
+          { start: 2.0, end: 2.4, value: "HH" }, { start: 2.4, end: 2.8, value: "oh" },
+          { start: 2.8, end: 3.2, value: "L" }, { start: 3.2, end: 3.6, value: "oo" },
+          { start: 3.6, end: 4.0, value: "neutral" },
+        ],
+        expressions: [
+          { start: 0.0, end: 0.6, type: "neutral", intensity: 0 },
+          { start: 0.6, end: 1.6, type: "friendly", intensity: 0.4 },
+          { start: 1.6, end: 4.2, type: "happy", intensity: 0.35 },
+          { start: 4.2, end: 5.2, type: "friendly", intensity: 0.25 },
+          { start: 5.2, end: 6.0, type: "neutral", intensity: 0 },
+        ],
+        head: [
+          { time: 0, yaw: 0, pitch: 0, roll: 0 },
+          { time: 2.6, yaw: 0, pitch: 0, roll: 0 },
+          { time: 3.1, yaw: -4, pitch: 1, roll: -1 },
+          { time: 3.9, yaw: 4, pitch: 0, roll: 1 },
+          { time: 4.8, yaw: 0, pitch: 0, roll: 0 },
+          { time: 6.0, yaw: 0, pitch: 0, roll: 0 },
+        ],
+        blinks: [
+          { time: 1.1, duration: 0.12 },
+          { time: 2.5, duration: 0.11 },
+          { time: 4.6, duration: 0.12 },
+        ],
+      };
+      // The test uses its own explicit cues; ignore the expression dropdown.
+      const payload = JSON.parse(JSON.stringify(seq));
+      if (!controls.head) payload.head = [];
+      if (!controls.blink) payload.blinks = [];
+      payload.sentence_index = clock.sentenceIndex;
+      avatar.attachTimeline(payload);
+      clock.duration = payload.duration;
+      clock.t = 0;
+      play();
+      setStatus("Running spec §28 sequence: neutral → friendly → speak → smile → blink → head turn → neutral.");
+    }
+
+    // ── Say (client viseme estimate) ──────────────────────────────────
+    const visemes = new VisemeProvider();
+    function say() {
+      const text = document.getElementById("say-text").value.trim();
+      if (!text) return;
+      const words = text.split(/\s+/).length;
+      const duration = Math.max(1.2, words / 2.5);
+      const payload = visemes.build(text, duration, "en");
+      payload.sentence_index = clock.sentenceIndex;
+      if (!controls.head) payload.head = [];
+      avatar.attachTimeline(payload);
+      clock.duration = payload.duration;
+      clock.t = 0;
+      play();
+      setStatus("Speaking client-estimate timeline (alignment: estimated-client).");
+    }
+
+    // ── Wire controls ─────────────────────────────────────────────────
+    document.getElementById("play").addEventListener("click", play);
+    document.getElementById("pause").addEventListener("click", pause);
+    document.getElementById("stop").addEventListener("click", stop);
+    document.getElementById("replay").addEventListener("click", replay);
+    document.getElementById("reset").addEventListener("click", () => {
+      stop(); avatar.attachTimeline({ version: "1.0", sentence_index: clock.sentenceIndex, duration: 0.01, visemes: [], expressions: [], head: [], blinks: [] });
+      clock.duration = 0; setStatus("Reset.");
+    });
+    document.getElementById("run-test").addEventListener("click", runAnimationTest);
+    document.getElementById("load-sample").addEventListener("click", () => { if (sample) { apply(sample); setStatus("Sample reloaded."); } });
+    document.getElementById("say").addEventListener("click", say);
+    document.getElementById("expr").addEventListener("change", (e) => {
+      controls.expression = e.target.value;
+      if (sample && !clock.playing) apply(sample);
+    });
+    document.getElementById("expr-int").addEventListener("input", (e) => {
+      controls.intensity = parseFloat(e.target.value);
+      document.getElementById("expr-val").textContent = controls.intensity.toFixed(2);
+      if (sample && !clock.playing) apply(sample);
+    });
+    document.getElementById("debug-on").addEventListener("change", (e) => avatar.setDebug(e.target.checked));
+
+    boot().catch((err) => {
+      console.error(err);
+      setStatus("Avatar failed to initialise: " + err.message);
+    });
+    tickUI();
+  </script>
+</body>
+</html>

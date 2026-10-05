@@ -9,11 +9,15 @@ import re
 import time
 from typing import TYPE_CHECKING, AsyncIterator
 
+from backend.animation.providers.rule_based import RuleBasedVisemeProvider
 from backend.booking.booking_service import BookingService, SLOT_EXTRACTION_PROMPT
 from backend.config import (
     LLM_SYSTEM_PROMPT, LLM_SYSTEM_PROMPT_UR, LLM_PROVIDER,
     AUDIO_ENERGY_THRESHOLD, MIN_AUDIO_DURATION_MS,
+    FILLER_ENABLED, FILLER_MAX_WAIT_MS,
+    AVATAR_ENABLED, TTS_SAMPLE_RATE, AUDIO_CHANNELS, AUDIO_SAMPLE_WIDTH,
 )
+from backend.core.fillers import FillerCache
 from backend.core.session import Session
 from backend.stt.audio_utils import compute_rms, audio_duration_ms
 from backend.tts.edge_tts_client import EdgeTTSClient
@@ -50,6 +54,16 @@ class VoicePipeline:
         self._booking = booking
         # Use Ollama for slot extraction if using Gemini for chat
         self._slot_llm = llm  # will be overridden in main.py if needed
+        self._fillers = FillerCache(self._tts, self._tts_ur)
+        self._visemes = RuleBasedVisemeProvider()
+
+    async def warmup(self) -> None:
+        """Pre-synthesize fillers. Called once at startup."""
+        if FILLER_ENABLED:
+            try:
+                await self._fillers.warmup()
+            except Exception:
+                logger.exception("Filler warmup failed — continuing without fillers")
 
     def set_slot_llm(self, slot_llm) -> None:
         """Set a separate LLM client for slot extraction (e.g. local Ollama)."""
@@ -81,6 +95,8 @@ class VoicePipeline:
         session.is_responding = True
         pipeline_start = time.perf_counter()
         timing: dict = {"audio_bytes": len(audio_data), "rms": round(rms)}
+        filler_task: asyncio.Task | None = None
+        reply_started: asyncio.Event | None = None
 
         try:
             # ── STT ──────────────────────────────────────────────────
@@ -101,6 +117,13 @@ class VoicePipeline:
             await ws.send_json({"type": "transcript", "text": transcript})
             session.add_message("user", transcript)
 
+            # ── Filler: cover RAG + LLM first-token latency ──────────
+            reply_started = asyncio.Event()
+            if FILLER_ENABLED and self._fillers.has(session.language):
+                filler_task = asyncio.create_task(
+                    self._send_filler(session, ws, reply_started)
+                )
+
             # ── RAG ──────────────────────────────────────────────────
             if cancel.is_set():
                 return
@@ -115,45 +138,50 @@ class VoicePipeline:
             if cancel.is_set():
                 return
 
-            # Build system prompt based on language
+            # ── Build the system prompt in one place ─────────────────
             if session.language == "ur":
                 system_prompt = LLM_SYSTEM_PROMPT_UR
             else:
                 system_prompt = LLM_SYSTEM_PROMPT
 
-            # Add user name context if available
+            # Guard: if we already know the name, pin it into the slots so it
+            # can never surface in "Still needed" and never gets re-asked.
             if session.user_name:
-                if session.language == "ur":
-                    system_prompt += (
-                        f"\n\nاہم: مہمان کا نام {session.user_name} ہے۔ "
-                        f"آپ کو ان کا نام پہلے سے معلوم ہے۔ کبھی نام نہ پوچھیں۔ "
-                        f"بکنگ کے لیے \"{session.user_name}\" استعمال کریں۔ "
-                        f"سیدھا تاریخوں، کمرے کی قسم، اور مہمانوں کی تعداد پوچھیں۔"
-                    )
-                else:
-                    system_prompt += (
-                        f"\n\nIMPORTANT: The guest's name is {session.user_name}. "
-                        f"You already know their name. NEVER ask for their name. "
-                        f"Use \"{session.user_name}\" for the booking. "
-                        f"Skip directly to asking about dates, room type, and number of guests."
-                    )
+                session.slots.guest_name = session.user_name
 
+            # 1) RAG context
             if context:
                 system_prompt += f"\n\n{context}"
 
-            if session.slots.filled_slots:
-                status = session.slots.status_dict()
-                required_missing = [
-                    s for s in session.slots.required_slots
-                    if getattr(session.slots, s) is None
-                ]
-                system_prompt += (
-                    f"\n\nCurrent booking status: {json.dumps(status['filled'])}"
-                )
-                if required_missing:
-                    system_prompt += f"\nStill needed: {', '.join(required_missing)}"
+            # 2) Booking status + what is still needed
+            filled = session.slots.filled_slots
+            required_missing = [
+                s for s in session.slots.required_slots
+                if getattr(session.slots, s) is None and s != "guest_name"
+            ]
+            if filled:
+                system_prompt += f"\n\nCurrent booking status: {json.dumps(filled)}"
+            if required_missing:
+                system_prompt += f"\nStill needed: {', '.join(required_missing)}"
+            elif filled:
+                system_prompt += "\nAll required info collected. Wrap up the conversation."
+
+            # 3) Name rule LAST — the final, strongest instruction.
+            if session.user_name:
+                if session.language == "ur":
+                    system_prompt += (
+                        f"\n\nاہم (سب سے آخری ہدایت، اوپر کی تمام ہدایات پر مقدم): "
+                        f"مہمان کا نام {session.user_name} ہے۔ آپ کو ان کا نام پہلے سے معلوم ہے۔ "
+                        f"کبھی نام نہ پوچھیں اور نہ دوبارہ تصدیق کے لیے پوچھیں۔ "
+                        f"بکنگ کے لیے \"{session.user_name}\" استعمال کریں۔"
+                    )
                 else:
-                    system_prompt += "\nAll required info collected. Wrap up the conversation."
+                    system_prompt += (
+                        f"\n\nIMPORTANT (final instruction, overrides everything above): "
+                        f"The guest's name is {session.user_name}. You already know it. "
+                        f"NEVER ask for their name and never ask them to confirm it. "
+                        f"Use \"{session.user_name}\" for the booking."
+                    )
 
             # ── LLM (streaming, sentence-by-sentence TTS) ────────────
             if cancel.is_set():
@@ -175,6 +203,9 @@ class VoicePipeline:
                 if first_token_time is None:
                     first_token_time = time.perf_counter()
                     timing["llm_first_token_ms"] = _ms(llm_start)
+                    # Reply has started — suppress any pending filler.
+                    if reply_started is not None:
+                        reply_started.set()
 
                 full_response += token
                 sentence_buffer += token
@@ -244,7 +275,59 @@ class VoicePipeline:
             except Exception:
                 pass
         finally:
+            if filler_task is not None and not filler_task.done():
+                filler_task.cancel()
             session.is_responding = False
+
+    async def _send_filler(
+        self, session: Session, ws: WebSocket, reply_started: asyncio.Event
+    ) -> None:
+        """Play a short filler unless the real reply starts within the wait window."""
+        try:
+            await asyncio.wait_for(
+                reply_started.wait(), timeout=FILLER_MAX_WAIT_MS / 1000
+            )
+            return  # reply started in time — no filler needed
+        except asyncio.TimeoutError:
+            pass
+        except asyncio.CancelledError:
+            return
+
+        if session.cancel_event.is_set():
+            return
+
+        filler = self._fillers.next(session.language)
+        if not filler:
+            return
+        text, pcm = filler
+
+        try:
+            await ws.send_json({
+                "type": "response.text",
+                "text": text,
+                "filler": True,
+                "sentence_index": -1,
+            })
+            await ws.send_json({
+                "type": "audio.begin",
+                "sentence_index": -1,
+                "sample_rate": TTS_SAMPLE_RATE,
+                "channels": AUDIO_CHANNELS,
+                "format": "s16le",
+            })
+            for i in range(0, len(pcm), 8192):
+                if session.cancel_event.is_set():
+                    return
+                await ws.send_bytes(pcm[i:i + 8192])
+            await ws.send_json({
+                "type": "audio.end",
+                "sentence_index": -1,
+                "bytes": len(pcm),
+            })
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            logger.debug("Filler playback failed", exc_info=True)
 
     async def resume_response(self, session: Session, ws: WebSocket) -> None:
         """Resume speaking the last response from where it was interrupted."""
@@ -270,17 +353,14 @@ class VoicePipeline:
                 session.session_id, spoken, len(sentences)
             )
 
-            tts = self._get_tts(session)
             for sentence in remaining:
                 if cancel.is_set():
                     break
-                await ws.send_json({"type": "response.text", "text": sentence})
-
-                async for chunk in tts.synthesize_streaming(sentence, cancel):
-                    if cancel.is_set():
-                        return
-                    await ws.send_bytes(chunk)
-
+                await self._send_sentence_audio(
+                    session, ws, sentence, session.last_spoken_sentences
+                )
+                if cancel.is_set():
+                    return
                 session.last_spoken_sentences += 1
 
             if not cancel.is_set():
@@ -294,30 +374,85 @@ class VoicePipeline:
     async def _send_sentence(
         self, session, ws, sentence, cancel, timing, sentence_index
     ) -> None:
+        """Send one sentence's text + audio + animation timeline.
+
+        Thin wrapper so every streaming caller shares the exact same
+        protocol; `timing` collects per-sentence TTS latencies.
+        """
         if cancel.is_set():
             return
+        await self._send_sentence_audio(session, ws, sentence, sentence_index, timing)
 
-        await ws.send_json({"type": "response.text", "text": sentence})
+    async def _send_sentence_audio(
+        self,
+        session: Session,
+        ws: WebSocket,
+        text: str,
+        sentence_index: int,
+        timing: dict | None = None,
+    ) -> None:
+        """Emit the full per-sentence envelope:
+
+            response.text -> audio.begin -> (binary PCM) -> audio.end
+                          -> timing.tts -> animation.timeline
+        """
+        if session.cancel_event.is_set():
+            return
+
+        await ws.send_json({
+            "type": "response.text",
+            "text": text,
+            "sentence_index": sentence_index,
+        })
+        await ws.send_json({
+            "type": "audio.begin",
+            "sentence_index": sentence_index,
+            "sample_rate": TTS_SAMPLE_RATE,
+            "channels": AUDIO_CHANNELS,
+            "format": "s16le",
+        })
 
         tts = self._get_tts(session)
         t0 = time.perf_counter()
         tts_bytes = 0
-        async for chunk in tts.synthesize_streaming(sentence, cancel):
-            if cancel.is_set():
-                return
+        async for chunk in tts.synthesize_streaming(text, session.cancel_event):
+            if session.cancel_event.is_set():
+                return  # audio.end omitted on interrupt; client resets via `interrupted`
             tts_bytes += len(chunk)
             await ws.send_bytes(chunk)
 
         tts_ms = _ms(t0)
-        timing[f"tts_sentence_{sentence_index}_ms"] = tts_ms
+        duration_s = tts_bytes / AUDIO_SAMPLE_WIDTH / TTS_SAMPLE_RATE
 
+        await ws.send_json({
+            "type": "audio.end",
+            "sentence_index": sentence_index,
+            "bytes": tts_bytes,
+        })
+
+        if timing is not None:
+            timing[f"tts_sentence_{sentence_index}_ms"] = tts_ms
         await ws.send_json({
             "type": "timing.tts",
             "sentence_index": sentence_index,
             "tts_ms": tts_ms,
             "tts_bytes": tts_bytes,
-            "text_length": len(sentence),
+            "text_length": len(text),
         })
+
+        # ── Animation timeline (client-side avatar) ──────────────
+        if AVATAR_ENABLED and not session.cancel_event.is_set():
+            try:
+                timeline = self._visemes.build(
+                    text, duration_s, session.language
+                )
+                timeline.sentence_index = sentence_index
+                await ws.send_json({
+                    "type": "animation.timeline",
+                    **timeline.to_dict(),
+                })
+            except Exception:
+                logger.exception("Timeline build failed for: %.40s", text)
 
     async def _extract_slots(self, session: Session, ws: WebSocket) -> None:
         if len(session.history) < 2:
@@ -396,14 +531,12 @@ class VoicePipeline:
             )
 
         session.add_message("assistant", summary)
-        await ws.send_json({"type": "response.text", "text": summary})
 
-        # TTS the confirmation
-        tts = self._get_tts(session)
-        async for chunk in tts.synthesize_streaming(summary):
+        # TTS the confirmation, sentence-by-sentence (with animation timelines).
+        for idx, sentence in enumerate(split_sentences(summary)):
             if session.cancel_event.is_set():
-                return
-            await ws.send_bytes(chunk)
+                break
+            await self._send_sentence_audio(session, ws, sentence, idx)
 
         await ws.send_json({
             "type": "booking.saved",
@@ -431,6 +564,8 @@ class VoicePipeline:
 
     async def send_greeting(self, session: Session, ws: WebSocket) -> None:
         t0 = time.perf_counter()
+        # Participate in the same interrupt logic as every other response.
+        session.is_responding = True
 
         # Personalized greeting based on language
         if session.language == "ur":
@@ -457,16 +592,12 @@ class VoicePipeline:
                 )
 
         session.add_message("assistant", greeting)
-        await ws.send_json({"type": "response.text", "text": greeting})
-
-        tts = self._get_tts(session)
         tts_start = time.perf_counter()
-        async for chunk in tts.synthesize_streaming(greeting):
-            if session.cancel_event.is_set():
-                return
-            await ws.send_bytes(chunk)
-
-        await ws.send_json({
-            "type": "response.end",
-            "timing": {"greeting_tts_ms": _ms(tts_start), "total_pipeline_ms": _ms(t0)},
-        })
+        try:
+            await self._send_sentence_audio(session, ws, greeting, 0)
+            await ws.send_json({
+                "type": "response.end",
+                "timing": {"greeting_tts_ms": _ms(tts_start), "total_pipeline_ms": _ms(t0)},
+            })
+        finally:
+            session.is_responding = False

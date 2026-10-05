@@ -59,6 +59,8 @@ class SileroVAD:
         self._silence_chunks = 0
         self._is_speaking = False
         self._audio_buffer = bytearray()
+        # Total speech windows seen in the current utterance (for interrupt gating)
+        self._total_speech_chunks = 0
 
     def process_chunk(self, pcm_bytes: bytes) -> tuple[bool, bool]:
         """Process a chunk of PCM audio (s16le, 16 kHz, mono).
@@ -84,6 +86,7 @@ class SileroVAD:
 
             if prob >= self._threshold:
                 self._speech_chunks += 1
+                self._total_speech_chunks += 1
                 self._silence_chunks = 0
 
                 if not self._is_speaking and self._speech_chunks >= self._min_speech_chunks:
@@ -105,3 +108,8 @@ class SileroVAD:
     @property
     def is_speaking(self) -> bool:
         return self._is_speaking
+
+    @property
+    def speech_ms(self) -> float:
+        """Approximate duration of VAD-confirmed speech in the current utterance."""
+        return self._total_speech_chunks * (SILERO_CHUNK_SAMPLES / STT_SAMPLE_RATE * 1000)

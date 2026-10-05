@@ -1,25 +1,29 @@
 /**
  * Main application logic.
- * WebSocket connection, UI state, call experience, performance metrics.
+ * WebSocket connection, call UI state, audio, avatar, performance metrics.
  */
 
-import { AudioCapture, AudioPlayback, BargeInDetector } from "./audio-handler.js";
+import { AudioCapture, BargeInDetector } from "./audio-handler.js";
+import { AudioPlayer } from "./audio/AudioPlayer.js";
+import { AvatarRuntime } from "./avatar/AvatarRuntime.js";
 
 // ── State ─────────────────────────────────────────────────────────────
 
 let ws = null;
 let capture = null;
-let playback = null;
+let player = null;
 let bargeIn = null;
+let avatar = null;
 let isInCall = false;
 let aiSpeaking = false;
-let userSpeaking = false;
 let callTimerInterval = null;
 let callStartTime = null;
 let perfEntryCount = 0;
 let currentTtsSentences = [];
 let userName = "";
 let userLanguage = "en";
+let micMuted = false;
+let avatarEnabled = true;
 
 // ── DOM Elements ──────────────────────────────────────────────────────
 
@@ -30,42 +34,37 @@ const callingOverlay = document.getElementById("calling-overlay");
 const callingStatus = document.getElementById("calling-status");
 const callView = document.getElementById("call-view");
 const transcriptEl = document.getElementById("transcript");
-const bookingPanel = document.getElementById("booking-panel");
 const bookingSlots = document.getElementById("booking-slots");
+const bookingEmpty = document.getElementById("booking-empty");
 const endCallBtn = document.getElementById("end-call-btn");
+const micBtn = document.getElementById("mic-btn");
+const debugToggle = document.getElementById("debug-toggle");
 const callTimer = document.getElementById("call-timer");
 const perfToggle = document.getElementById("perf-toggle");
 const perfBody = document.getElementById("perf-body");
 const perfChevron = document.getElementById("perf-chevron");
 const perfEntries = document.getElementById("perf-entries");
-const avatarAzure = document.getElementById("avatar-azure");
-const avatarUser = document.getElementById("avatar-user");
+const videoTile = document.getElementById("video-tile");
 const azureStatus = document.getElementById("azure-status");
-const userStatus = document.getElementById("user-status");
-const userAvatarLetter = document.getElementById("user-avatar-letter");
-const userDisplayName = document.getElementById("user-display-name");
+const avatarCanvas = document.getElementById("avatar-canvas");
+const avatarPhoto = document.getElementById("avatar-photo");
+const alignmentBadge = document.getElementById("alignment-badge");
+const alignmentValue = document.getElementById("alignment-value");
+
+// Static fallback image (used only if the WebGL avatar can't initialise).
+avatarPhoto.onerror = () => { avatarPhoto.onerror = null; avatarPhoto.src = "/avatars/azure/placeholder.svg"; };
+avatarPhoto.src = "/avatars/azure/photo.jpg";
 
 // ── UI Updates ────────────────────────────────────────────────────────
 
 function setAzureState(state) {
-  avatarAzure.classList.remove("speaking");
   azureStatus.textContent = state;
-  if (state === "Speaking...") {
-    avatarAzure.classList.add("speaking");
-  }
+  videoTile.classList.toggle("speaking", state === "Speaking...");
 }
 
-function setUserState(state) {
-  avatarUser.classList.remove("speaking");
-  userStatus.textContent = state;
-  if (state === "Speaking...") {
-    avatarUser.classList.add("speaking");
-  }
-}
-
-function addTranscript(role, text) {
+function addTranscript(role, text, opts = {}) {
   const bubble = document.createElement("div");
-  bubble.className = `chat-bubble ${role === "user" ? "user" : "azure"}`;
+  bubble.className = `chat-bubble ${role === "user" ? "user" : "azure"}${opts.filler ? " filler" : ""}`;
 
   const nameEl = document.createElement("div");
   nameEl.className = "bubble-name";
@@ -82,13 +81,6 @@ function addTranscript(role, text) {
 }
 
 function updateBookingPanel(status) {
-  if (!status.filled || Object.keys(status.filled).length === 0) {
-    bookingPanel.classList.add("hidden");
-    return;
-  }
-
-  bookingPanel.classList.remove("hidden");
-
   const slotNames = {
     guest_name: "Name",
     contact: "Contact",
@@ -98,19 +90,28 @@ function updateBookingPanel(status) {
     num_guests: "Guests",
   };
 
+  const filled = status.filled || {};
   let html = "";
   for (const [key, label] of Object.entries(slotNames)) {
-    const value = status.filled[key];
-    const filled = value !== undefined && value !== null;
+    const value = filled[key];
+    const isFilled = value !== undefined && value !== null;
     html += `
-      <div class="slot ${filled ? "filled" : "empty"}">
+      <div class="slot ${isFilled ? "filled" : "empty"}">
         <span class="slot-label">${label}</span>
-        <span class="slot-value">${filled ? value : "\u2014"}</span>
+        <span class="slot-value">${isFilled ? value : "\u2014"}</span>
       </div>
     `;
   }
-
   bookingSlots.innerHTML = html;
+
+  const anyFilled = Object.keys(filled).length > 0;
+  bookingEmpty.classList.toggle("hidden", anyFilled);
+}
+
+function showAlignment(alignment) {
+  if (!alignment) return;
+  alignmentValue.textContent = alignment === "estimated-rule-based" ? "estimated" : alignment;
+  alignmentBadge.classList.remove("hidden");
 }
 
 // ── Call Timer ─────────────────────────────────────────────────────────
@@ -244,7 +245,7 @@ function connectWS() {
 
   ws.onmessage = (e) => {
     if (e.data instanceof ArrayBuffer) {
-      playback.enqueue(e.data);
+      player?.enqueue(e.data);
       return;
     }
 
@@ -259,13 +260,28 @@ function connectWS() {
       case "transcript":
         addTranscript("user", msg.text);
         setAzureState("Processing...");
-        setUserState("Waiting");
         break;
 
       case "response.text":
-        addTranscript("assistant", msg.text);
+        addTranscript("assistant", msg.text, { filler: msg.filler });
+        if (msg.filler) {
+          // Filler doesn't mean the *agent* started yet, keep "Processing..."
+          break;
+        }
         setAzureState("Speaking...");
-        setUserState("Listening");
+        break;
+
+      case "audio.begin":
+        player?.beginSentence(msg.sentence_index, msg);
+        break;
+
+      case "audio.end":
+        player?.endSentence(msg.sentence_index, msg);
+        break;
+
+      case "animation.timeline":
+        if (avatar) avatar.attachTimeline(msg);
+        showAlignment(msg.alignment);
         break;
 
       case "timing.tts":
@@ -277,9 +293,8 @@ function connectWS() {
 
       case "response.end":
         setAzureState("Listening");
-        setUserState("Connected");
         if (msg.timing) {
-          const assistantBubbles = transcriptEl.querySelectorAll(".chat-bubble.azure .bubble-text");
+          const assistantBubbles = transcriptEl.querySelectorAll(".chat-bubble.azure:not(.filler) .bubble-text");
           const recentTexts = [];
           for (let i = Math.max(0, assistantBubbles.length - (msg.timing.sentence_count || 0)); i < assistantBubbles.length; i++) {
             recentTexts.push(assistantBubbles[i].textContent);
@@ -292,8 +307,8 @@ function connectWS() {
         break;
 
       case "interrupted":
+        player?.interrupt();
         setAzureState("Paused");
-        setUserState("Connected");
         break;
 
       case "booking.status":
@@ -305,10 +320,7 @@ function connectWS() {
         break;
 
       case "session.end":
-        // Graceful call end from server (after booking confirmation)
-        setTimeout(() => {
-          endCall();
-        }, 2000);
+        setTimeout(() => { endCall(); }, 2000);
         break;
 
       case "error":
@@ -318,13 +330,33 @@ function connectWS() {
     }
   };
 
-  ws.onclose = () => {
-    if (isInCall) endCall();
-  };
+  ws.onclose = () => { if (isInCall) endCall(); };
+  ws.onerror = () => { setAzureState("Error"); };
+}
 
-  ws.onerror = () => {
-    setAzureState("Error");
-  };
+// ── Avatar ────────────────────────────────────────────────────────────
+
+async function initAvatar() {
+  try {
+    avatar = new AvatarRuntime({
+      canvas: avatarCanvas,
+      avatarId: "azure",
+      getClock: () => (player ? player.getPlayhead() : null),
+      getAnalyzer: () => (player ? player.analyzer : null),
+      debug: false,
+    });
+    const ok = await avatar.init();
+    if (!ok) throw new Error("avatar init failed");
+    // Swap photo -> canvas.
+    avatarPhoto.classList.add("hidden");
+    avatarCanvas.classList.remove("hidden");
+    avatar.start();
+  } catch (err) {
+    console.warn("Avatar unavailable, using static photo:", err);
+    avatar = null;
+    avatarCanvas.classList.add("hidden");
+    avatarPhoto.classList.remove("hidden");
+  }
 }
 
 // ── Call Management ───────────────────────────────────────────────────
@@ -333,62 +365,54 @@ async function startCall() {
   try {
     isInCall = true;
 
-    // Hide name modal, show calling overlay
     nameModal.classList.add("hidden");
     callingOverlay.classList.remove("hidden");
     callingStatus.textContent = "Calling...";
 
-    // Play ring tone
     const ringCtx = new AudioContext();
     const ring = createRingTone(ringCtx);
 
-    // Prepare audio
-    playback = new AudioPlayback(
-      () => {
-        aiSpeaking = true;
-        setAzureState("Speaking...");
-      },
-      () => {
-        aiSpeaking = false;
-        setAzureState("Listening");
-      }
-    );
+    player = new AudioPlayer({
+      onStart: () => { aiSpeaking = true; setAzureState("Speaking..."); },
+      onEnd: () => { aiSpeaking = false; setAzureState("Listening"); },
+    });
 
-    bargeIn = new BargeInDetector(0.06);
+    bargeIn = new BargeInDetector(-35);
 
-    capture = new AudioCapture((pcmBuffer) => {
+    capture = new AudioCapture((frame) => {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (micMuted) return;
 
-      if (aiSpeaking && bargeIn.check(pcmBuffer)) {
-        playback.stop();
+      // Barge-in only while the agent is speaking, and only on
+      // gated+sustained speech (not raw energy / background noise).
+      if (aiSpeaking && bargeIn.check(frame)) {
+        player.stopAll();
         aiSpeaking = false;
         ws.send(JSON.stringify({ type: "interrupt" }));
-        setUserState("Speaking...");
       }
 
-      ws.send(pcmBuffer);
+      ws.send(frame.pcm);
     });
 
     await capture.start();
 
-    // Ring for 3.5 seconds, then "connect"
     await new Promise(resolve => setTimeout(resolve, 3500));
-
     ring.stop();
     ringCtx.close();
 
     if (!isInCall) return;
 
-    // Transition: "Connected"
     callingStatus.textContent = "Connected";
     await new Promise(resolve => setTimeout(resolve, 700));
 
     if (!isInCall) return;
 
-    // Show call view
     callingOverlay.classList.add("hidden");
     callView.classList.remove("hidden");
     startCallTimer();
+
+    if (avatarEnabled) await initAvatar();
+
     connectWS();
 
   } catch (err) {
@@ -401,28 +425,30 @@ async function startCall() {
 function endCall() {
   isInCall = false;
 
+  if (avatar) { avatar.destroy(); avatar = null; }
   if (capture) { capture.stop(); capture = null; }
-  if (playback) { playback.stop(); playback = null; }
+  if (player) { player.dispose(); player = null; }
   if (ws) { ws.close(); ws = null; }
 
   aiSpeaking = false;
-  userSpeaking = false;
   callingOverlay.classList.add("hidden");
   callView.classList.add("hidden");
   stopCallTimer();
 
-  // Reset to name modal
   nameModal.classList.remove("hidden");
-  bookingPanel.classList.add("hidden");
+  alignmentBadge.classList.add("hidden");
+  avatarCanvas.classList.add("hidden");
+  avatarPhoto.classList.remove("hidden");
 
-  // Clear transcript
   transcriptEl.innerHTML = "";
 
-  // Reset perf
   perfEntryCount = 0;
   perfEntries.innerHTML = '<div class="perf-empty">Timing data appears after first response</div>';
   perfBody.classList.add("hidden");
   perfChevron.classList.remove("open");
+
+  micMuted = false;
+  micBtn.classList.remove("active");
 }
 
 // ── Event Listeners ───────────────────────────────────────────────────
@@ -435,32 +461,33 @@ startCallBtn.addEventListener("click", () => {
     setTimeout(() => { nameInput.style.borderColor = ""; }, 1500);
     return;
   }
-
-  // Set user avatar letter and display name
-  userAvatarLetter.textContent = userName.charAt(0).toUpperCase();
-  userDisplayName.textContent = userName;
-
   startCall();
 });
 
-// Allow Enter key to start call from name input
 nameInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    startCallBtn.click();
+  if (e.key === "Enter") startCallBtn.click();
+});
+
+endCallBtn.addEventListener("click", () => endCall());
+
+micBtn.addEventListener("click", () => {
+  micMuted = !micMuted;
+  micBtn.classList.toggle("active", micMuted);
+  if (capture?.stream) {
+    capture.stream.getAudioTracks().forEach(t => { t.enabled = !micMuted; });
   }
 });
 
-endCallBtn.addEventListener("click", () => {
-  endCall();
+debugToggle.addEventListener("click", () => {
+  debugToggle.classList.toggle("active");
+  avatar?.setDebug(debugToggle.classList.contains("active"));
 });
 
-// Performance panel toggle
 perfToggle.addEventListener("click", () => {
   perfBody.classList.toggle("hidden");
   perfChevron.classList.toggle("open");
 });
 
-// Language selector
 const langBtns = document.querySelectorAll(".lang-btn");
 langBtns.forEach(btn => {
   btn.addEventListener("click", () => {
@@ -470,5 +497,4 @@ langBtns.forEach(btn => {
   });
 });
 
-// Auto-focus name input on load
 nameInput.focus();

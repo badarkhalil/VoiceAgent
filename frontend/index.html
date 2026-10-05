@@ -52,68 +52,78 @@
 
     <!-- In-Call View -->
     <div class="call-view hidden" id="call-view">
+      <div class="call-layout">
 
-      <!-- Header -->
-      <div class="call-header">
-        <h1>The <span>Grand Azure</span> Hotel</h1>
-        <p class="subtitle">AI Concierge</p>
-      </div>
-
-      <!-- Avatar Section -->
-      <div class="avatars-section">
-        <div class="avatar-card" id="avatar-azure">
-          <div class="avatar-circle azure">
-            <span class="avatar-letter">A</span>
-            <div class="speaking-ring"></div>
+        <!-- LEFT: booking / details + transcript -->
+        <aside class="call-sidebar">
+          <div class="call-header">
+            <h1>The <span>Grand Azure</span> Hotel</h1>
+            <p class="subtitle">AI Concierge</p>
           </div>
-          <div class="avatar-name">Azure</div>
-          <div class="avatar-status" id="azure-status">Listening</div>
-        </div>
-        <div class="avatar-card" id="avatar-user">
-          <div class="avatar-circle user">
-            <span class="avatar-letter" id="user-avatar-letter">U</span>
-            <div class="speaking-ring"></div>
+
+          <div class="booking-panel" id="booking-panel">
+            <div class="booking-title">Booking Details</div>
+            <div class="slots-grid" id="booking-slots"></div>
+            <div class="booking-empty" id="booking-empty">Details will fill in as you talk.</div>
           </div>
-          <div class="avatar-name" id="user-display-name">You</div>
-          <div class="avatar-status" id="user-status">Connected</div>
-        </div>
-      </div>
 
-      <!-- Chat Transcript -->
-      <div class="chat-container" id="transcript">
-      </div>
+          <div class="transcript-wrap">
+            <div class="transcript-title">Live Transcript</div>
+            <div class="chat-container" id="transcript"></div>
+          </div>
+        </aside>
 
-      <!-- Bottom Panels -->
-      <div class="panels-row">
-        <!-- Booking Panel -->
-        <div class="booking-panel hidden" id="booking-panel">
-          <div class="booking-title">Booking Details</div>
-          <div class="slots-grid" id="booking-slots"></div>
-        </div>
-
-        <!-- Performance Panel -->
-        <div class="perf-panel" id="perf-panel">
-          <button class="perf-toggle" id="perf-toggle">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-            Performance
-            <span class="perf-chevron" id="perf-chevron">&#9660;</span>
-          </button>
-          <div class="perf-body hidden" id="perf-body">
-            <div class="perf-entries" id="perf-entries">
-              <div class="perf-empty">Timing data appears after first response</div>
+        <!-- RIGHT: agent video tile -->
+        <main class="call-stage">
+          <div class="video-tile" id="video-tile">
+            <img class="avatar-photo" id="avatar-photo" alt="Azure" />
+            <canvas class="avatar-canvas hidden" id="avatar-canvas"></canvas>
+            <div class="speaking-ring"></div>
+            <div class="video-overlay">
+              <div class="participant-name" id="azure-name">Azure</div>
+              <div class="participant-status" id="azure-status">Listening</div>
+            </div>
+            <div class="video-badge hidden" id="alignment-badge">
+              <span class="badge-dot"></span>
+              Lip-sync: <strong id="alignment-value">estimated</strong>
             </div>
           </div>
-        </div>
+
+          <div class="perf-panel" id="perf-panel">
+            <button class="perf-toggle" id="perf-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+              Performance
+              <span class="perf-chevron" id="perf-chevron">&#9660;</span>
+            </button>
+            <div class="perf-body hidden" id="perf-body">
+              <div class="perf-entries" id="perf-entries">
+                <div class="perf-empty">Timing data appears after first response</div>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
 
-      <!-- End Call Button -->
+      <!-- Bottom call controls -->
       <div class="call-controls">
-        <button class="end-call-btn" id="end-call-btn">
+        <button class="ctrl-btn" id="mic-btn" title="Mute microphone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+          </svg>
+        </button>
+        <button class="end-call-btn" id="end-call-btn" title="End call">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24">
             <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91"/>
             <line x1="23" y1="1" x2="1" y2="23"/>
+          </svg>
+        </button>
+        <button class="ctrl-btn" id="debug-toggle" title="Toggle avatar debug overlay">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
+            <rect x="3" y="4" width="18" height="14" rx="2"/>
+            <path d="M7 22h10M12 18v4"/>
           </svg>
         </button>
         <span class="call-timer" id="call-timer">00:00</span>

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Avatar Prep – landmark rig &amp; mouth mask</title>
+  <style>
+    :root { --bg:#141a24; --panel:#1d2635; --line:#2c3a4f; --text:#e6ecf5; --muted:#8ea0b8; --accent:#3da9fc; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:14px 20px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:baseline; }
+    header h1 { font-size:16px; margin:0; }
+    header span { color:var(--muted); font-size:12px; }
+    .wrap { display:grid; grid-template-columns: 1fr 340px; gap:16px; padding:16px; }
+    .stage { position:relative; background:#0e131c; border:1px dashed var(--line); border-radius:12px; min-height:520px; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    canvas { max-width:100%; cursor:crosshair; touch-action:none; }
+    .hint { color:var(--muted); font-size:13px; text-align:center; padding:24px; }
+    aside { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; height:fit-content; }
+    aside h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 10px; }
+    button { background:#26344a; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 12px; cursor:pointer; font-size:13px; }
+    button.primary { background:var(--accent); border-color:var(--accent); color:#04121f; font-weight:600; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .points { max-height:280px; overflow:auto; font-size:12px; }
+    .point { display:flex; justify-content:space-between; padding:3px 6px; border-radius:6px; }
+    .point.active { background:#24344b; }
+    .point span:last-child { color:var(--muted); font-variant-numeric: tabular-nums; }
+    #status { font-size:12px; color:var(--muted); margin-top:10px; min-height:32px; }
+    label.file { display:inline-block; }
+    input[type=file] { display:none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Avatar Prep</h1>
+    <span>Drop a photo → place landmarks → export rig.json &amp; mouthMask.png</span>
+  </header>
+
+  <div class="wrap">
+    <div class="stage" id="stage">
+      <div class="hint" id="hint">Drop a front-facing photo here, or use “Choose photo”.<br/>Then drag the points onto the face.</div>
+      <canvas id="canvas" hidden></canvas>
+    </div>
+
+    <aside>
+      <h2>Photo</h2>
+      <div class="row">
+        <label class="file"><input type="file" id="file" accept="image/*" /><button onclick="this.previousElementSibling.click()">Choose photo</button></label>
+        <button id="auto" disabled>Auto-detect</button>
+      </div>
+
+      <h2>Rig</h2>
+      <div class="row">
+        <button id="reset" disabled>Reset points</button>
+        <button class="primary" id="export-rig" disabled>Export rig.json</button>
+      </div>
+      <div class="row">
+        <button id="export-mask" disabled>Export mouthMask.png</button>
+      </div>
+
+      <h2>Landmarks</h2>
+      <div class="points" id="points"></div>
+
+      <div id="status"></div>
+    </aside>
+  </div>
+
+  <script type="module">
+    // Defaults mirror avatars/azure/rig.json. Keys are the rig's landmark names.
+    const DEFAULT = {
+      faceCenter:[0.500,0.500],
+      mouthCenter:[0.500,0.720], mouthLeft:[0.396,0.715], mouthRight:[0.604,0.715],
+      mouthTop:[0.500,0.700], mouthBottom:[0.500,0.745],
+      chin:[0.500,0.845], jawLeft:[0.340,0.790], jawRight:[0.660,0.790],
+      leftEye:[0.419,0.449], rightEye:[0.581,0.449],
+      leftEyeTop:[0.419,0.424], leftEyeBottom:[0.419,0.476],
+      rightEyeTop:[0.581,0.424], rightEyeBottom:[0.581,0.476],
+      leftBrow:[0.419,0.374], rightBrow:[0.581,0.374],
+      leftBrowInner:[0.470,0.380], rightBrowInner:[0.530,0.380],
+      leftCheek:[0.380,0.585], rightCheek:[0.620,0.585],
+    };
+
+    const stage = document.getElementById("stage");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const hint = document.getElementById("hint");
+    const pointsEl = document.getElementById("points");
+    const statusEl = document.getElementById("status");
+
+    let img = null;
+    let points = clone(DEFAULT);
+    let scale = 1, offX = 0, offY = 0;
+    let dragging = null;
+
+    function clone(o) { return JSON.parse(JSON.stringify(o)); }
+    function setStatus(s) { statusEl.textContent = s; }
+
+    // ── File loading ──────────────────────────────────────────────────
+    document.getElementById("file").addEventListener("change", (e) => {
+      if (e.target.files[0]) loadFile(e.target.files[0]);
+    });
+    ["dragover", "drop"].forEach(ev => stage.addEventListener(ev, (e) => e.preventDefault()));
+    stage.addEventListener("drop", (e) => {
+      const f = e.dataTransfer.files[0];
+      if (f && f.type.startsWith("image/")) loadFile(f);
+    });
+
+    function loadFile(file) {
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        img = image;
+        hint.hidden = true;
+        canvas.hidden = false;
+        layout();
+        render();
+        for (const id of ["auto", "reset", "export-rig", "export-mask"]) {
+          document.getElementById(id).disabled = false;
+        }
+        setStatus(`Loaded ${image.naturalWidth}×${image.naturalHeight}. Drag points to fit.`);
+        URL.revokeObjectURL(url);
+      };
+      image.onerror = () => setStatus("Could not read that image.");
+      image.src = url;
+    }
+
+    // ── Canvas layout ─────────────────────────────────────────────────
+    function layout() {
+      const maxW = Math.max(320, stage.clientWidth - 24);
+      const maxH = Math.max(360, stage.clientHeight - 24);
+      scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+      canvas.width = Math.round(img.naturalWidth * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      offX = 0; offY = 0;
+      // canvas is centered by flex; drawing is in canvas space.
+    }
+
+    function toCanvas([nx, ny]) { return [nx * canvas.width, ny * canvas.height]; }
+    function toNorm(cx, cy) { return [cx / canvas.width, cy / canvas.height]; }
+
+    // ── Rendering ─────────────────────────────────────────────────────
+    function render() {
+      if (!img) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      // Guide lines for orientation.
+      ctx.strokeStyle = "rgba(61,169,252,0.35)";
+      ctx.lineWidth = 1;
+      line("leftEye", "rightEye");
+      line("mouthLeft", "mouthRight");
+      line("mouthTop", "mouthBottom");
+      line("leftBrow", "rightBrow");
+      line("chin", "faceCenter");
+
+      for (const [name, p] of Object.entries(points)) {
+        const [x, y] = toCanvas(p);
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = isMouth(name) ? "#ff8a5c" : isEye(name) ? "#7cf07c" : "#3da9fc";
+        ctx.fill();
+        ctx.strokeStyle = "#0b1018";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+
+    function line(a, b) {
+      const [x1, y1] = toCanvas(points[a]);
+      const [x2, y2] = toCanvas(points[b]);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+    function isMouth(n) { return n.toLowerCase().includes("mouth") || n.toLowerCase().includes("chin") || n.toLowerCase().includes("jaw"); }
+    function isEye(n) { return n.toLowerCase().includes("eye") || n.toLowerCase().includes("brow"); }
+
+    function renderList() {
+      pointsEl.innerHTML = "";
+      for (const [name, p] of Object.entries(points)) {
+        const row = document.createElement("div");
+        row.className = "point";
+        row.dataset.name = name;
+        row.innerHTML = `<span>${name}</span><span>${p[0].toFixed(3)}, ${p[1].toFixed(3)}</span>`;
+        row.addEventListener("mouseenter", () => { dragging = name; render(); });
+        row.addEventListener("mouseleave", () => { dragging = null; render(); });
+        pointsEl.appendChild(row);
+      }
+    }
+
+    // ── Pointer editing ───────────────────────────────────────────────
+    function pick(ev) {
+      const r = canvas.getBoundingClientRect();
+      const cx = (ev.clientX - r.left) * (canvas.width / r.width);
+      const cy = (ev.clientY - r.top) * (canvas.height / r.height);
+      let best = null, bestD = 18 * 18;
+      for (const [name, p] of Object.entries(points)) {
+        const [x, y] = toCanvas(p);
+        const d = (x - cx) ** 2 + (y - cy) ** 2;
+        if (d < bestD) { bestD = d; best = name; }
+      }
+      return { name: best, cx, cy };
+    }
+
+    canvas.addEventListener("pointerdown", (e) => {
+      const hit = pick(e);
+      if (hit.name) { dragging = hit.name; canvas.setPointerCapture(e.pointerId); }
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const r = canvas.getBoundingClientRect();
+      const cx = (e.clientX - r.left) * (canvas.width / r.width);
+      const cy = (e.clientY - r.top) * (canvas.height / r.height);
+      points[dragging] = toNorm(cx, cy);
+      render();
+      renderList();
+    });
+    canvas.addEventListener("pointerup", () => { dragging = null; });
+
+    window.addEventListener("resize", () => { if (img) { layout(); render(); } });
+
+    // ── Auto-detect (optional MediaPipe drop-in) ──────────────────────
+    // If you vendor MediaPipe under /vendor/mediapipe/, this will refine the
+    // points automatically. Without it, manual placement is fully supported.
+    document.getElementById("auto").addEventListener("click", async () => {
+      setStatus("Loading MediaPipe…");
+      try {
+        const mod = await import("/vendor/mediapipe/vision_bundle.mjs");
+        const fileset = await mod.FilesetResolver.forVisionTasks("/vendor/mediapipe/wasm");
+        const landmarker = await mod.FaceLandmarker.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: "/vendor/mediapipe/face_landmarker.task" },
+          numFaces: 1,
+        });
+        const res = landmarker.detect(img);
+        if (!res || !res.faceLandmarks || !res.faceLandmarks[0]) throw new Error("no face found");
+        points = mapLandmarks(res.faceLandmarks[0]);
+        render(); renderList();
+        setStatus("Auto-detected. Fine-tune by dragging if needed.");
+      } catch (err) {
+        setStatus("Auto-detect unavailable (" + err.message + "). Place points manually — this is fully supported.");
+      }
+    });
+
+    function mid(lm, a, b) { return [(lm[a].x + lm[b].x) / 2, (lm[a].y + lm[b].y) / 2]; }
+
+    function mapLandmarks(lm) {
+      const p = clone(points);
+      const set = (name, v) => { if (v) p[name] = [clamp01(v[0]), clamp01(v[1])]; };
+      set("mouthLeft", [lm[61].x, lm[61].y]);
+      set("mouthRight", [lm[291].x, lm[291].y]);
+      set("mouthTop", [lm[13].x, lm[13].y]);
+      set("mouthBottom", [lm[14].x, lm[14].y]);
+      set("mouthCenter", mid(lm, 13, 14));
+      set("chin", [lm[152].x, lm[152].y]);
+      set("jawLeft", [lm[172].x, lm[172].y]);
+      set("jawRight", [lm[397].x, lm[397].y]);
+      set("leftEye", mid(lm, 33, 133));
+      set("rightEye", mid(lm, 362, 263));
+      set("leftEyeTop", [lm[159].x, lm[159].y]);
+      set("leftEyeBottom", [lm[145].x, lm[145].y]);
+      set("rightEyeTop", [lm[386].x, lm[386].y]);
+      set("rightEyeBottom", [lm[374].x, lm[374].y]);
+      set("leftBrow", mid(lm, 70, 107));
+      set("rightBrow", mid(lm, 300, 336));
+      set("leftBrowInner", [lm[107].x, lm[107].y]);
+      set("rightBrowInner", [lm[336].x, lm[336].y]);
+      set("leftCheek", [lm[234].x, lm[234].y]);
+      set("rightCheek", [lm[454].x, lm[454].y]);
+      const cx = (p.leftCheek[0] + p.rightCheek[0]) / 2;
+      const cy = (p.leftBrow[1] + p.chin[1]) / 2;
+      p.faceCenter = [cx, cy];
+      return p;
+    }
+
+    function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+    // ── Export ────────────────────────────────────────────────────────
+    document.getElementById("reset").addEventListener("click", () => {
+      points = clone(DEFAULT); render(); renderList(); setStatus("Points reset to defaults.");
+    });
+
+    document.getElementById("export-rig").addEventListener("click", () => {
+      const data = {
+        version: "1.0",
+        note: "Generated by prepare.html",
+        landmarks: roundAll(points),
+      };
+      download("rig.json", new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      setStatus("rig.json downloaded — place it in avatars/<id>/.");
+    });
+
+    document.getElementById("export-mask").addEventListener("click", () => {
+      if (!img) return;
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const g = c.getContext("2d");
+      // White = keep the face, black = transparent (mouth interior hole).
+      g.fillStyle = "#ffffff";
+      g.fillRect(0, 0, c.width, c.height);
+
+      const cx = points.mouthCenter[0] * c.width;
+      const cy = points.mouthCenter[1] * c.height;
+      const rx = Math.max(4, (points.mouthRight[0] - points.mouthLeft[0]) / 2 * c.width * 0.86);
+      const ry = Math.max(3, (points.mouthBottom[1] - points.mouthCenter[1]) * c.height * 2.2);
+
+      const grad = g.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+      grad.addColorStop(0, "#000000");
+      grad.addColorStop(0.72, "#000000");
+      grad.addColorStop(1, "#ffffff");
+      g.save();
+      g.translate(cx, cy);
+      g.scale(rx / Math.max(rx, ry), ry / Math.max(rx, ry));
+      g.translate(-cx, -cy);
+      g.fillStyle = grad;
+      g.beginPath();
+      g.arc(cx, cy, Math.max(rx, ry), 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+
+      c.toBlob((blob) => {
+        download("mouthMask.png", blob);
+        setStatus("mouthMask.png downloaded — place it in avatars/<id>/.");
+      }, "image/png");
+    });
+
+    function roundAll(o) {
+      const out = {};
+      for (const [k, v] of Object.entries(o)) out[k] = [r3(v[0]), r3(v[1])];
+      return out;
+    }
+    function r3(v) { return Math.round(v * 1000) / 1000; }
+
+    function download(name, blob) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    renderList();
+  </script>
+</body>
+</html>

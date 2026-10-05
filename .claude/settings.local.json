@@ -15,7 +15,15 @@
       "Bash(powershell:*)",
       "Bash(docker run:*)",
       "Bash(docker start:*)",
-      "Bash(python -m uvicorn:*)"
+      "Bash(python -m uvicorn:*)",
+      "Bash(python:*)",
+      "Bash(for:*)",
+      "Bash(do:*)",
+      "Bash(done)",
+      "Bash(ls:*)",
+      "Bash(node:*)",
+      "Bash(docker:*)",
+      "Bash(docker ps:*)"
     ]
   }
 }

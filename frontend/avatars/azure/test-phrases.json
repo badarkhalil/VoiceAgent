@@ -1,0 +1,13 @@
+{
+  "note": "Spec §29 test speech. The first block is the reference sample; the second matches this product.",
+  "reference": [
+    "Hello, welcome to our dental clinic.",
+    "We provide dental cleaning, root canal treatment, dental implants, and cosmetic dentistry.",
+    "How can I help you today?"
+  ],
+  "hotel": [
+    "Hello, welcome to the Grand Azure Hotel.",
+    "I can help you with a room reservation, check availability, or answer any questions.",
+    "How can I help you today?"
+  ]
+}

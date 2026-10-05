@@ -7,5 +7,7 @@ qdrant-client
 faster-whisper
 numpy
 silero-vad
+torch
+edge-tts
 pydantic
 python-dotenv

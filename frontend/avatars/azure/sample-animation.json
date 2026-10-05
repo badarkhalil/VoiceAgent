@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "avatarId": "azure",
+  "sentence_index": 0,
+  "duration": 5.2,
+  "alignment": "estimated-rule-based",
+  "visemes": [
+    { "start": 0.000, "end": 0.120, "value": "neutral" },
+    { "start": 0.120, "end": 0.240, "value": "HH" },
+    { "start": 0.240, "end": 0.360, "value": "eh" },
+    { "start": 0.360, "end": 0.470, "value": "L" },
+    { "start": 0.470, "end": 0.610, "value": "oh" },
+    { "start": 0.610, "end": 0.760, "value": "closed" },
+    { "start": 0.760, "end": 0.900, "value": "ee" },
+    { "start": 0.900, "end": 1.040, "value": "td" },
+    { "start": 1.040, "end": 1.220, "value": "neutral" },
+    { "start": 1.220, "end": 1.400, "value": "oo" },
+    { "start": 1.400, "end": 1.560, "value": "kg" },
+    { "start": 1.560, "end": 1.720, "value": "aa" },
+    { "start": 1.720, "end": 1.940, "value": "sh" },
+    { "start": 1.940, "end": 2.160, "value": "ee" },
+    { "start": 2.160, "end": 2.460, "value": "neutral" },
+    { "start": 2.460, "end": 2.640, "value": "ae" },
+    { "start": 2.640, "end": 2.820, "value": "L" },
+    { "start": 2.820, "end": 3.020, "value": "oh" },
+    { "start": 3.020, "end": 3.200, "value": "fv" },
+    { "start": 3.200, "end": 3.520, "value": "neutral" },
+    { "start": 3.520, "end": 3.700, "value": "oo" },
+    { "start": 3.700, "end": 3.900, "value": "aa" },
+    { "start": 3.900, "end": 4.100, "value": "td" },
+    { "start": 4.100, "end": 4.300, "value": "eh" },
+    { "start": 4.300, "end": 4.600, "value": "s" },
+    { "start": 4.600, "end": 5.200, "value": "neutral" }
+  ],
+  "expressions": [
+    { "start": 0.0, "end": 5.2, "type": "friendly", "intensity": 0.25 },
+    { "start": 0.2, "end": 1.6, "type": "happy", "intensity": 0.45 },
+    { "start": 3.4, "end": 4.8, "type": "thinking", "intensity": 0.35 }
+  ],
+  "head": [
+    { "time": 0.0, "yaw": 0, "pitch": 0, "roll": 0 },
+    { "time": 1.3, "yaw": -3.0, "pitch": 1.2, "roll": -0.8 },
+    { "time": 2.6, "yaw": 2.5, "pitch": 0.4, "roll": 0.6 },
+    { "time": 3.9, "yaw": -1.6, "pitch": 1.8, "roll": -0.4 },
+    { "time": 5.2, "yaw": 0, "pitch": 0, "roll": 0 }
+  ],
+  "blinks": [
+    { "time": 1.1, "duration": 0.12 },
+    { "time": 2.7, "duration": 0.11 },
+    { "time": 4.3, "duration": 0.13 }
+  ]
+}

@@ -1,0 +1,60 @@
+"""Compact CMUdict-style subset (ARPAbet, stress digits stripped).
+
+Only a small high-frequency + hotel-domain vocabulary is bundled; anything
+missing falls back to the grapheme rules in `g2p.py`.  This keeps the repo
+small while giving accurate visemes for the words this agent actually says.
+"""
+
+LEXICON: dict[str, list[str]] = {
+    # Greetings / function words
+    "hi": ["HH", "AY"], "hello": ["HH", "AH", "L", "OW"],
+    "hey": ["HH", "EY"], "the": ["DH", "AH"], "a": ["AH"],
+    "an": ["AE", "N"], "and": ["AE", "N", "D"], "or": ["AO", "R"],
+    "i": ["AY"], "you": ["Y", "UW"], "your": ["Y", "AO", "R"],
+    "we": ["W", "IY"], "me": ["M", "IY"], "my": ["M", "AY"],
+    "is": ["IH", "Z"], "are": ["AA", "R"], "am": ["AE", "M"],
+    "it": ["IH", "T"], "this": ["DH", "IH", "S"], "that": ["DH", "AE", "T"],
+    "to": ["T", "UW"], "of": ["AH", "V"], "in": ["IH", "N"],
+    "on": ["AA", "N"], "for": ["F", "AO", "R"], "with": ["W", "IH", "DH"],
+    "can": ["K", "AE", "N"], "will": ["W", "IH", "L"], "would": ["W", "UH", "D"],
+    "yes": ["Y", "EH", "S"], "no": ["N", "OW"], "okay": ["OW", "K", "EY"],
+    "sure": ["SH", "UH", "R"], "thanks": ["TH", "AE", "NG", "K", "S"],
+    "thank": ["TH", "AE", "NG", "K"], "please": ["P", "L", "IY", "Z"],
+    "sorry": ["S", "AA", "R", "IY"], "welcome": ["W", "EH", "L", "K", "AH", "M"],
+    "good": ["G", "UH", "D"], "great": ["G", "R", "EY", "T"],
+    "day": ["D", "EY"], "morning": ["M", "AO", "R", "N", "IH", "NG"],
+    "afternoon": ["AE", "F", "T", "ER", "N", "UW", "N"],
+    "evening": ["IY", "V", "N", "IH", "NG"],
+    # Hotel / booking domain
+    "azure": ["AE", "ZH", "ER"], "grand": ["G", "R", "AE", "N", "D"],
+    "hotel": ["HH", "OW", "T", "EH", "L"], "booking": ["B", "UH", "K", "IH", "NG"],
+    "book": ["B", "UH", "K"], "room": ["R", "UW", "M"],
+    "standard": ["S", "T", "AE", "N", "D", "ER", "D"],
+    "deluxe": ["D", "IH", "L", "AH", "K", "S"],
+    "suite": ["S", "W", "IY", "T"], "presidential": ["P", "R", "EH", "Z", "IH", "D", "EH", "N", "SH", "AH", "L"],
+    "check": ["CH", "EH", "K"], "in": ["IH", "N"], "out": ["AW", "T"],
+    "date": ["D", "EY", "T"], "night": ["N", "AY", "T"],
+    "nights": ["N", "AY", "T", "S"], "guest": ["G", "EH", "S", "T"],
+    "guests": ["G", "EH", "S", "T", "S"], "name": ["N", "EY", "M"],
+    "number": ["N", "AH", "M", "B", "ER"], "price": ["P", "R", "AY", "S"],
+    "floor": ["F", "L", "AO", "R"], "view": ["V", "Y", "UW"],
+    "service": ["S", "ER", "V", "IH", "S"], "services": ["S", "ER", "V", "IH", "S", "IH", "Z"],
+    "breakfast": ["B", "R", "EH", "K", "F", "AH", "S", "T"],
+    "wifi": ["W", "AY", "F", "AY"], "pool": ["P", "UW", "L"],
+    "help": ["HH", "EH", "L", "P"], "need": ["N", "IY", "D"],
+    "want": ["W", "AA", "N", "T"], "like": ["L", "AY", "K"],
+    "confirm": ["K", "AH", "N", "F", "ER", "M"], "available": ["AH", "V", "EY", "L", "AH", "B", "AH", "L"],
+    "day": ["D", "EY"], "today": ["T", "AH", "D", "EY"],
+    "tomorrow": ["T", "AH", "M", "AA", "R", "OW"],
+    "one": ["W", "AH", "N"], "two": ["T", "UW"], "three": ["TH", "R", "IY"],
+    "four": ["F", "AO", "R"], "five": ["F", "AY", "V"], "six": ["S", "IH", "K", "S"],
+    "seven": ["S", "EH", "V", "AH", "N"], "eight": ["EY", "T"],
+    "nine": ["N", "AY", "N"], "ten": ["T", "EH", "N"],
+    "how": ["HH", "AW"], "what": ["W", "AH", "T"], "when": ["W", "EH", "N"],
+    "where": ["W", "EH", "R"], "which": ["W", "IH", "CH"],
+    "many": ["M", "EH", "N", "IY"], "much": ["M", "AH", "CH"],
+    "have": ["HH", "AE", "V"], "has": ["HH", "AE", "Z"],
+    "let": ["L", "EH", "T"], "check": ["CH", "EH", "K"],
+    "moment": ["M", "OW", "M", "AH", "N", "T"],
+    "right": ["R", "AY", "T"], "now": ["N", "AW"],
+}

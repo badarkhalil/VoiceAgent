@@ -1,0 +1,11 @@
+{
+  "id": "azure",
+  "name": "Azure",
+  "photo": "agent.jpg",
+  "placeholder": "agent.jpg",
+  "innerMouth": "innerMouth.png",
+  "teeth": "teeth.png",
+  "mouthMask": "mouthMask.png",
+  "mesh": { "cols": 32, "rows": 32 },
+  "expressions": { "default": "friendly", "idleIntensity": 0.25 }
+}

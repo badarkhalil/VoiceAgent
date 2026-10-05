@@ -6,7 +6,10 @@ import asyncio
 import uuid
 
 from backend.booking.booking_service import BookingSlots
-from backend.config import LLM_MAX_HISTORY
+from backend.config import LLM_MAX_HISTORY, MAX_AUDIO_BUFFER_SECONDS, STT_SAMPLE_RATE, AUDIO_SAMPLE_WIDTH
+
+# Hard cap on buffered client PCM so a stuck noise source can't grow it forever.
+MAX_AUDIO_BUFFER_BYTES = STT_SAMPLE_RATE * AUDIO_SAMPLE_WIDTH * MAX_AUDIO_BUFFER_SECONDS
 
 
 class Session:
@@ -42,6 +45,13 @@ class Session:
         """
         recent = self.history[-LLM_MAX_HISTORY:] if len(self.history) > LLM_MAX_HISTORY else self.history
         return [{"role": "system", "content": system_prompt}] + recent
+
+    def append_audio(self, chunk: bytes) -> None:
+        """Append client PCM, trimming the oldest data past the hard cap."""
+        self.audio_buffer.extend(chunk)
+        overflow = len(self.audio_buffer) - MAX_AUDIO_BUFFER_BYTES
+        if overflow > 0:
+            del self.audio_buffer[:overflow]
 
     def reset_audio(self) -> None:
         """Clear audio buffer for next utterance."""

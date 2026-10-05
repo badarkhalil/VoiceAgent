@@ -147,32 +147,67 @@ export class AudioPlayback {
 
 // ── Barge-in Detector ─────────────────────────────────────────────────
 
+/**
+ * Decides whether incoming microphone audio is a genuine, sustained
+ * interruption of the agent — not background noise.
+ *
+ * It consumes the gated `{ pcm, rms, speech }` frames produced by the
+ * capture worklet and requires:
+ *   - the worklet's noise gate to be open (speech), AND
+ *   - the frame to exceed `thresholdDb` (dBFS), AND
+ *   - a minimum number of consecutive frames, AND
+ *   - a minimum sustained duration.
+ *
+ * Callers must only invoke `check()` while the agent is speaking.
+ */
 export class BargeInDetector {
-  constructor(threshold = 0.06) {
-    this.threshold = threshold;
+  constructor(thresholdDb = -35, opts = {}) {
+    this.thresholdDb = thresholdDb;
+    this.requiredFrames = opts.requiredFrames ?? 5;
+    this.minSustainedMs = opts.minSustainedMs ?? 250;
     this.consecutiveFrames = 0;
-    this.requiredFrames = 2; // Require 2 consecutive frames above threshold
+    this.sustainedMs = 0;
   }
 
-  check(pcmArrayBuffer) {
-    const int16 = new Int16Array(pcmArrayBuffer);
-    if (int16.length === 0) return false;
+  reset() {
+    this.consecutiveFrames = 0;
+    this.sustainedMs = 0;
+  }
 
+  _frameRms(frame) {
+    // New worklet path: { pcm, rms, speech }.
+    if (frame && typeof frame === "object" && !(frame instanceof ArrayBuffer)) {
+      return { rms: frame.rms || 0, speech: frame.speech !== false, length: (frame.pcm?.byteLength || 0) / 2 };
+    }
+    // Legacy path: a raw ArrayBuffer of s16le PCM.
+    const int16 = new Int16Array(frame);
     let sum = 0;
     for (let i = 0; i < int16.length; i++) {
       const s = int16[i] / 32768;
       sum += s * s;
     }
-    const rms = Math.sqrt(sum / int16.length);
+    return { rms: int16.length ? Math.sqrt(sum / int16.length) : 0, speech: true, length: int16.length };
+  }
 
-    if (rms > this.threshold) {
+  check(frame) {
+    const { rms, speech, length } = this._frameRms(frame);
+    if (!length) return false;
+
+    const db = 20 * Math.log10(rms + 1e-9);
+    const above = speech && db > this.thresholdDb;
+
+    if (above) {
       this.consecutiveFrames++;
-      if (this.consecutiveFrames >= this.requiredFrames) {
-        this.consecutiveFrames = 0;
+      this.sustainedMs += (length / 16000) * 1000;
+      if (
+        this.consecutiveFrames >= this.requiredFrames &&
+        this.sustainedMs >= this.minSustainedMs
+      ) {
+        this.reset();
         return true;
       }
     } else {
-      this.consecutiveFrames = 0;
+      this.reset();
     }
     return false;
   }

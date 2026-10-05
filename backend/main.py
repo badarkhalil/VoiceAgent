@@ -19,6 +19,8 @@ from backend.config import (
     MISTRAL_API_KEY,
     MISTRAL_CHAT_MODEL,
     MIN_AUDIO_DURATION_MS,
+    MIN_INTERRUPT_BYTES,
+    MIN_INTERRUPT_MS,
 )
 from backend.core.pipeline import VoicePipeline
 from backend.core.session import Session
@@ -47,7 +49,6 @@ booking: BookingService | None = None
 pipeline: VoicePipeline | None = None
 
 SILENCE_RESUME_TIMEOUT = 2.0   # seconds to wait before auto-resuming after interrupt
-MIN_INTERRUPT_BYTES = 9600     # ~300ms at 16kHz s16le — minimum audio to consider for interrupt
 
 
 @app.on_event("startup")
@@ -98,6 +99,10 @@ async def startup() -> None:
 
     # Slot extraction uses the main LLM (works for Gemini, Mistral, Ollama)
     # No separate slot LLM needed since we removed the model= override for non-Ollama
+
+    # Pre-synthesize fillers in the background so startup is never blocked.
+    # The pipeline simply skips fillers until the cache is ready.
+    asyncio.create_task(pipeline.warmup())
 
     logger.info("All services ready  (LLM=%s)", LLM_PROVIDER)
 
@@ -152,29 +157,36 @@ async def voice_ws(ws: WebSocket) -> None:
             # ── Binary frame: audio data ─────────────────────────────
             if message.get("type") == "websocket.receive" and "bytes" in message:
                 audio_chunk = message["bytes"]
-                session.audio_buffer.extend(audio_chunk)
+                session.append_audio(audio_chunk)
 
                 speech_started, speech_ended = vad.process_chunk(audio_chunk)
 
                 if speech_ended:
+                    # Snapshot VAD-confirmed speech duration before reset.
+                    vad_speech_ms = vad.speech_ms
                     vad.reset()
                     audio_data = bytes(session.audio_buffer)
                     dur = audio_duration_ms(audio_data)
                     rms = compute_rms(audio_data) if len(audio_data) >= 2 else 0.0
 
                     logger.debug(
-                        "Session %s: speech ended (%d bytes, %.0fms, rms=%.0f)",
-                        session.session_id, len(audio_data), dur, rms,
+                        "Session %s: speech ended (%d bytes, %.0fms, rms=%.0f, vad=%.0fms)",
+                        session.session_id, len(audio_data), dur, rms, vad_speech_ms,
                     )
 
                     # ── If agent is currently speaking, only interrupt for
-                    #    loud, sustained audio (real speech, not noise) ────
+                    #    loud, sustained, VAD-confirmed speech (not noise) ────
                     if session.is_responding:
-                        if len(audio_data) < MIN_INTERRUPT_BYTES or not is_interrupt_energy(audio_data):
+                        if (
+                            len(audio_data) < MIN_INTERRUPT_BYTES
+                            or vad_speech_ms < MIN_INTERRUPT_MS
+                            or not is_interrupt_energy(audio_data)
+                        ):
                             # Not loud/long enough — this is noise, ignore it
                             logger.debug(
-                                "Session %s: ignoring noise during response (rms=%.0f, dur=%.0fms)",
-                                session.session_id, rms, dur,
+                                "Session %s: ignoring noise during response "
+                                "(rms=%.0f, dur=%.0fms, vad=%.0fms)",
+                                session.session_id, rms, dur, vad_speech_ms,
                             )
                             session.reset_audio()
                             continue
